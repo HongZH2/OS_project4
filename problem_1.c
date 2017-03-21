@@ -48,6 +48,42 @@ typedef struct _thread_data_t {
   int enter;
 } thread_data_t;
 
+/* bird function*/
+void bird_enter(int k) {
+  pthread_mutex_lock(&mutex);
+  while (cats>0) {
+    pthread_cond_wait(&brd_cond, &mutex);}
+  birds++;  
+  play(); 
+  pthread_mutex_unlock(&mutex);
+}
+
+void bird_exit(int k) {
+  pthread_mutex_lock(&mutex);
+  birds--;
+  if(dogs==0&&birds==0)
+  {  
+    pthread_cond_broadcast(&cat_cond);
+  }
+  pthread_mutex_unlock(&mutex);
+}
+
+void *bird_thr_func(void *arg) {
+  thread_data_t *data = (thread_data_t *)arg;
+  int tid = data->tid;
+  long int i=0;
+  while(stop)
+  {
+    i++;
+    bird_enter(tid);
+    bird_exit(tid);
+  }
+
+  data->enter = i;
+  pthread_exit(NULL);
+}
+
+/* dog function*/
 void dog_enter(int k) {
   pthread_mutex_lock(&mutex);
   while (cats>0) {
@@ -67,7 +103,6 @@ void dog_exit(int k) {
   pthread_mutex_unlock(&mutex);
 }
 
-/*main thread function*/
 void *dog_thr_func(void *arg) {
   thread_data_t *data = (thread_data_t *)arg;
   int tid = data->tid;
@@ -134,13 +169,24 @@ int main(int argc, char *argv[]) {
   int NUM_CATS = atoi(argv[1]);
   int NUM_DOGS = atoi(argv[2]);
   int NUM_BIRS = atoi(argv[3]);
+
+  if( NUM_CATS<0 || NUM_DOGS<0 || NUM_BIRS<0)
+  {
+    fprintf(stderr, "ERROR: Please enter positive numbers\n");
+    return EXIT_FAILURE;
+  }
+  else if(NUM_CATS==0 && NUM_DOGS==0 && NUM_BIRS==0)
+  {
+    fprintf(stderr, "No pets in store.\n");
+    return 0;
+  }
    n_cats=NUM_CATS;
    n_dogs=NUM_DOGS;
    n_birds=NUM_BIRS; 
   /* create threads */
   pthread_t cat_thr[NUM_CATS];
   pthread_t dog_thr[NUM_DOGS];
-  pthread_t bir_thr[NUM_BIRS];
+  pthread_t brd_thr[NUM_BIRS];
 
   /* create a thread_data_t argument array */
   thread_data_t cat_tdata[NUM_CATS];
@@ -175,16 +221,25 @@ int main(int argc, char *argv[]) {
   for (i = 0; i < NUM_CATS; ++i) {
     cat_tdata[i].tid = i;
     if ((rc = pthread_create(&cat_thr[i], NULL, cat_thr_func, &cat_tdata[i]))) {
-      fprintf(stderr, "error: pthread_create, rc: %d\n", rc);
+      fprintf(stderr, "error: cat pthread_create, rc: %d\n", rc);
       break;
     }
   }
 
   //dog thread
   for (i = 0; i < NUM_DOGS; ++i) {
-    cat_tdata[i].tid = i;
+    dog_tdata[i].tid = i;
     if ((rc = pthread_create(&dog_thr[i], NULL, dog_thr_func, &dog_tdata[i]))) {
-      fprintf(stderr, "error: pthread_create, rc: %d\n", rc);
+      fprintf(stderr, "error: dog pthread_create, rc: %d\n", rc);
+      break;
+    }
+  } 
+
+  //dog thread
+  for (i = 0; i < NUM_BIRS; ++i) {
+    brd_tdata[i].tid = i;
+    if ((rc = pthread_create(&brd_thr[i], NULL, bird_thr_func, &brd_tdata[i]))) {
+      fprintf(stderr, "error: bird pthread_create, rc: %d\n", rc);
       break;
     }
   }   
@@ -198,14 +253,21 @@ int main(int argc, char *argv[]) {
     pthread_join(cat_thr[i], NULL);
     sum_cat+=cat_tdata[i].enter;
   }
-  printf("Cat enter %ld times\n",sum_cat);
+  printf("Cats enter %ld times\n",sum_cat);
   sum_cat=0;
   /* block until all threads complete */
   for (i = 0; i < NUM_DOGS; ++i) {
     pthread_join(dog_thr[i], NULL);
     sum_cat+=dog_tdata[i].enter;
   }
-  printf("Dog enter %ld times\n",sum_cat);
+  printf("Dogs enter %ld times\n",sum_cat);
+  sum_cat=0;
+  /* block until all threads complete */
+  for (i = 0; i < NUM_BIRS; ++i) {
+    pthread_join(brd_thr[i], NULL);
+    sum_cat+=brd_tdata[i].enter;
+  }
+  printf("Birds enter %ld times\n",sum_cat);
 
 
   return EXIT_SUCCESS;
