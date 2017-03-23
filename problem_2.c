@@ -9,6 +9,7 @@
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
+#include <errno.h>
 #define BUFF_SIZE  1024
 
 static uint32_t crc32_tab[] = {
@@ -70,15 +71,16 @@ uint32_t crc32(uint32_t crc, const void *buf, size_t size)
   return crc ^ ~0U;
 }
 
-int checksum(const char *name)
+int checksum(char *filename)
 {
   FILE *fin;
   uint32_t crc=0;
   char buff[BUFF_SIZE];
-
-  if((fin=fopen(name, "rb"))==NULL)
+  fin = fopen(filename,"r");
+  if(!fin)
   {
-      printf(" ACCESS ERROR\n");
+      //printf(" ACCESS ERROR %s ",strerror(errno));
+      printf("ACCESS ERROR\n");
       return 0;
   }
 
@@ -87,8 +89,8 @@ int checksum(const char *name)
     unsigned int nCount = fread( buff, sizeof(char), BUFF_SIZE, fin);
     if(ferror(fin))
     {
-      printf(" ACCESS ERROR in fread\n");
-      fclose( fin );
+      printf("ACCESS ERROR in fread\n");
+      fclose(fin);
       return 0;
     }
     crc = crc32( crc, buff, nCount );
@@ -107,6 +109,14 @@ int main(int argc, char *argv[]) {
   }
   /* convert string to int atoi()*/
   char* name = argv[1];
+  int dirlen=strlen(name);
+  printf("strlen %d \n",dirlen);
+  if(name[dirlen-1]!='/' || name[dirlen-1]!='\\')
+  {
+    name[dirlen]='/';
+    name[dirlen+1]='\0';
+  }  
+
   printf("Start searching directory %s \n",name);
 
   DIR           *d;
@@ -137,7 +147,8 @@ int main(int argc, char *argv[]) {
   //string array initialization
   //char *string;
   char **dirsname=malloc(index*sizeof(char *));
-  printf("String array memory created.\n");
+  //printf("String array memory created.\n");
+  printf("file name | crc32 checksum.\n");
 
   //open again
   if(!(d=opendir(name)))
@@ -146,7 +157,7 @@ int main(int argc, char *argv[]) {
     return 0;
   }
   //read
-  printf("Before Sorting:\n");
+  //printf("Before Sorting:\n");
   index=0;
   while ((dir = readdir(d)) != NULL)
   {
@@ -161,10 +172,10 @@ int main(int argc, char *argv[]) {
   }
 
   int i=0,j=0;
-  for(i=0;i<index;i++)
-  {
-    printf("%s\n", dirsname[i]);
-  }
+  // for(i=0;i<index;i++)
+  // {
+  //   printf("%s\n", dirsname[i]);
+  // }
   
   char *temp;  
   //sort string
@@ -172,7 +183,7 @@ int main(int argc, char *argv[]) {
   {
     for(j=i;j>0;j--)
     {
-      if(strcmp(dirsname[j],dirsname[j-1])>0)
+      if(strcmp(dirsname[j],dirsname[j-1])<0)
       {
         temp=dirsname[j-1];
         dirsname[j-1]=dirsname[j];
@@ -180,11 +191,14 @@ int main(int argc, char *argv[]) {
       }  
     }
   }
-  printf("After Sorting:\n");
+  //printf("After Sorting:\n");
+
   for(i=0;i<index;i++)
   {
-    printf("%s", dirsname[i]);
-    checksum(dirsname[i]);
+    printf("%s ", dirsname[i]);
+    char *fpath;
+    strcpy(fpath,name);
+    checksum(strcat(fpath,dirsname[i]));
   }
 
   //close
@@ -204,6 +218,7 @@ int main(int argc, char *argv[]) {
   }
   printf(" test checksum: %8X\n", crc);
   //result is 0x01FAF7F0
+  */
 
   return EXIT_SUCCESS;
 }
