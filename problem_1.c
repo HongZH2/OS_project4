@@ -54,7 +54,7 @@ void bird_enter(int k) {
   while (cats>0) {
     pthread_cond_wait(&brd_cond, &mutex);}
   birds++;  
-  play(); 
+  //play(); 
   pthread_mutex_unlock(&mutex);
 }
 
@@ -76,6 +76,7 @@ void *bird_thr_func(void *arg) {
   {
     i++;
     bird_enter(tid);
+    play();
     bird_exit(tid);
   }
 
@@ -89,7 +90,7 @@ void dog_enter(int k) {
   while (cats>0) {
     pthread_cond_wait(&dog_cond, &mutex);}
   dogs++;  
-  play(); 
+  //play(); 
   pthread_mutex_unlock(&mutex);
 }
 
@@ -111,6 +112,7 @@ void *dog_thr_func(void *arg) {
   {
     i++;
     dog_enter(tid);
+    play();
     dog_exit(tid);
   }
 
@@ -125,7 +127,7 @@ void cat_enter(int k) {
   while (dogs>0 || birds>0) {
     pthread_cond_wait(&cat_cond, &mutex);}
   cats++;  
-  play(); 
+  //play(); 
   pthread_mutex_unlock(&mutex);
 }
 
@@ -149,6 +151,7 @@ void *cat_thr_func(void *arg) {
   {
     i++;
     cat_enter(tid);
+    play();
     cat_exit(tid);
   }
 
@@ -170,9 +173,9 @@ int main(int argc, char *argv[]) {
   int NUM_DOGS = atoi(argv[2]);
   int NUM_BIRS = atoi(argv[3]);
 
-  if( NUM_CATS<0 || NUM_DOGS<0 || NUM_BIRS<0)
+  if( NUM_CATS<0 || NUM_DOGS<0 || NUM_BIRS<0 || NUM_CATS>99 || NUM_DOGS>99 || NUM_BIRS>99)
   {
-    fprintf(stderr, "ERROR: Please enter positive numbers\n");
+    fprintf(stderr, "ERROR: Please enter numbers between 0~99\n");
     return EXIT_FAILURE;
   }
   else if(NUM_CATS==0 && NUM_DOGS==0 && NUM_BIRS==0)

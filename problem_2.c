@@ -110,8 +110,8 @@ int main(int argc, char *argv[]) {
   /* convert string to int atoi()*/
   char* name = argv[1];
   int dirlen=strlen(name);
-  printf("strlen %d \n",dirlen);
-  if(name[dirlen-1]!='/' || name[dirlen-1]!='\\')
+  //printf("strlen %d \n",dirlen);
+  if(name[dirlen-1]!='/')
   {
     name[dirlen]='/';
     name[dirlen+1]='\0';
