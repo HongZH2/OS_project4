@@ -1,4 +1,3 @@
-//#define _GNU_SOURCE
 #include <sys/param.h>
 //#include <sys/systm.h>
 #include <unistd.h>
@@ -19,8 +18,9 @@ pthread_cond_t ck_cond;
 
 char *inputname;
 char **dirsname;
-volatile uint32_t *cksum;
-volatile cksum_state *ck_status;
+char **fullpath;
+uint32_t *cksum;
+cksum_state *ck_status;
 volatile int finished=0;
 
 int NUM_TRD=0;
@@ -92,7 +92,10 @@ uint32_t checksum(char *filename)
   char buff[BUFF_SIZE];
   fin = fopen(filename,"r");
   if(!fin)
-    return -1;
+  {
+    printf("fail to open %s\n",filename);
+    return 0;
+  }  
 
   while( !feof(fin) )
   {
@@ -100,7 +103,8 @@ uint32_t checksum(char *filename)
     if(ferror(fin))
     {
       fclose(fin);
-      return -1;
+      printf("fail to read %s\n",filename);
+      return 0;
     }
     crc = crc32( crc, buff, nCount );
   }
@@ -109,10 +113,10 @@ uint32_t checksum(char *filename)
   return crc;
 }
 
-int findyet()
+int findyet(void)
 {
   int i=0;
-  for(i=0;i<NUM_FILESi++)
+  for(i=0;i<NUM_FILES;i++)
   {
     if(ck_status[i]==Yet)
     {
@@ -123,34 +127,39 @@ int findyet()
   return -1;
 }
 /* bird function*/
-int ck_enter() {
+int ck_enter(void) {
   pthread_mutex_lock(&mutex);
   int r=findyet();
   pthread_mutex_unlock(&mutex);
   return r;
 }
 
-void ck_exit(uint32_t ck) {
+void ck_exit(uint32_t ck, int findex) {
   pthread_mutex_lock(&mutex);
+  //printf("ck_exit %d\n",findex);
   finished++;
+  cksum[findex]=ck;
+  ck_status[findex]=Done;
+  //printf("ck_status %d ",ck_status[findex]);
+  //printf("cksum %d\n",cksum[findex]);
+  //printf("index %d, ck_status %d, cksum %8X.\n",findex,ck_status[findex],cksum[findex]);
   pthread_mutex_unlock(&mutex);
 }
 
 void *ck_thr_func(void *arg) {
-  //thread_data_t *data = (thread_data_t *)arg;
-  //int tid = data->tid;
-  long int i=0;
+  
   int index=0;
-  uint32_t cksum=0;
+  uint32_t sum=0;
   while(finished<NUM_FILES)
   {
     index=ck_enter();
-    char *fpath;
-    strcpy(fpath,inputname);
-    cksum=checksum(strcat(fpath,dirsname[index]));
-    ck_exit(cksum);
+    if(index!=-1)
+    {
+      //printf("Try to open %s\n",fullpath[index]);
+      sum=checksum(fullpath[index]);
+      ck_exit(sum,index);
+    } 
   }
-  //data->enter = i;
   pthread_exit(NULL);
 }
 
@@ -162,8 +171,8 @@ int main(int argc, char *argv[]) {
     return EXIT_FAILURE;
   }
   /* convert string to int atoi()*/
-  int NUM_TRD = atoi(argv[2]);
-  if(NUM_TRD<1 || NUM_TRD>100)
+  NUM_TRD = atoi(argv[2]);
+  if(NUM_TRD<1 || NUM_TRD>=100)
   {
     fprintf(stderr, "ERROR: Please enter numbers between 1~99.\n");
     return EXIT_FAILURE;
@@ -174,7 +183,9 @@ int main(int argc, char *argv[]) {
   {
     inputname[dirlen]='/';
     inputname[dirlen+1]='\0';
+    dirlen++;
   }  
+  dirlen++;
 
   DIR           *d;
   struct dirent *dir;
@@ -199,13 +210,18 @@ int main(int argc, char *argv[]) {
   printf("%d files found\n", NUM_FILES);
   closedir(d);
 
-  dirsname=malloc(NUM_FILES*sizeof(**dirsname));
+
+  pthread_t ck_thr[NUM_TRD];
+  dirsname=malloc(NUM_FILES*sizeof(char *));
+  fullpath=malloc(NUM_FILES*sizeof(char *));
   cksum = malloc(NUM_FILES*sizeof(*cksum));
   ck_status = malloc(NUM_FILES*sizeof(*ck_status));
-
+  //state initialization
   for(index=0;index<NUM_FILES;index++)
   {
-
+    ck_status[index]=Yet;
+    cksum[index]=0;
+    //printf("index %d, ck_status %d, cksum %d.\n",index,ck_status[index],cksum[index]);
   }
   printf("file name | crc32 checksum.\n");
 
@@ -219,16 +235,18 @@ int main(int argc, char *argv[]) {
   index=0;
   while ((dir = readdir(d)) != NULL)
   {
-    if (dir->d_type != DT_DIR)
+    if (dir->d_type != DT_DIR && index<NUM_FILES)
     {
+      //printf("index: %d\n",index);
       dirsname[index]=(char *)malloc(sizeof(dir->d_name));
       strcpy(dirsname[index],dir->d_name);
+      //printf("dirsname: %s\n",dirsname[index]);
       index++;
     }
   }
-
   int i=0,j=0;
   char *temp;  
+
   //sort string
   for(i=1;i<NUM_FILES;i++)
   {
@@ -242,6 +260,16 @@ int main(int argc, char *argv[]) {
       }  
     }
   }
+  //full path
+  //char *fpath;
+  //strcpy(fpath,inputname);
+  for(index=0;index<NUM_FILES;index++)
+  {  
+    fullpath[index]=(char*)malloc((dirlen+strlen(dirsname[index])+1)*sizeof(char));
+    strcpy(fullpath[index],inputname);
+    strcat(fullpath[index],dirsname[index]);
+    //printf("fullpath: %s\n",fullpath[index]);
+  }
 
   //mutex initial
   if(pthread_mutex_init(&mutex, NULL) != 0) {
@@ -249,16 +277,28 @@ int main(int argc, char *argv[]) {
     exit(1);
   }
   
-  //create threads
-  uint32_t tempcksum=0;
+  /*create threads*/
+  int rc=0;
+  for (i = 0; i < NUM_TRD; ++i) {
+    if ((rc = pthread_create(&ck_thr[i], NULL, ck_thr_func, NULL))) {
+      fprintf(stderr, "error: pthread_create, rc: %d\n", rc);
+      break;
+    }
+  }
+  //printf("Create threads complete\n");
+  /* block until all threads complete */
+  for (i = 0; i < NUM_TRD; ++i) {
+    pthread_join(ck_thr[i], NULL);
+  }
+  //printf("Join %d complete\n",NUM_TRD);
+
+  //print result
   for(i=0;i<NUM_FILES;i++)
   {
-    printf("%s ", dirsname[i]);
-    tempcksum=cksum[i];
-    if(tempcksum==-1)
-      printf("ACCESS ERROR\n");
+    if(cksum[i]!=0)
+      printf("%s %08X\n",dirsname[i],cksum[i]);
     else 
-      printf("%8X\n",tempcksum);
+      printf("%s ACCESS ERROR\n",dirsname[i]);
   }
 
   //close dir and free memory
@@ -268,7 +308,7 @@ int main(int argc, char *argv[]) {
   }
   free(dirsname);
   free(ck_status);
-  //free(cksum);
+  free(cksum);
   closedir(d);
 
   return EXIT_SUCCESS;

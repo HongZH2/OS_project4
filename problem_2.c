@@ -79,7 +79,6 @@ int checksum(char *filename)
   fin = fopen(filename,"r");
   if(!fin)
   {
-      //printf(" ACCESS ERROR %s ",strerror(errno));
       printf("ACCESS ERROR\n");
       return 0;
   }
@@ -96,7 +95,7 @@ int checksum(char *filename)
     crc = crc32( crc, buff, nCount );
   }
   fclose(fin);
-  printf("%8X\n",crc);
+  printf("%08X\n",crc);
   return 1;
 }
 
@@ -115,7 +114,9 @@ int main(int argc, char *argv[]) {
   {
     name[dirlen]='/';
     name[dirlen+1]='\0';
-  }  
+    dirlen++;
+  }
+  dirlen++;  
 
   printf("Start searching directory %s \n",name);
 
@@ -157,14 +158,11 @@ int main(int argc, char *argv[]) {
     return 0;
   }
   //read
-  //printf("Before Sorting:\n");
   index=0;
   while ((dir = readdir(d)) != NULL)
   {
     if (dir->d_type != DT_DIR)
     {
-      //printf("index: %d ,", index);
-      //printf("size of d_name: %lu\n", sizeof(dir->d_name));
       dirsname[index]=(char *)malloc(sizeof(dir->d_name));
       strcpy(dirsname[index],dir->d_name);
       index++;
@@ -172,10 +170,6 @@ int main(int argc, char *argv[]) {
   }
 
   int i=0,j=0;
-  // for(i=0;i<index;i++)
-  // {
-  //   printf("%s\n", dirsname[i]);
-  // }
   
   char *temp;  
   //sort string
@@ -196,7 +190,7 @@ int main(int argc, char *argv[]) {
   for(i=0;i<index;i++)
   {
     printf("%s ", dirsname[i]);
-    char *fpath;
+    char *fpath=malloc((dirlen+strlen(dirsname[i]))*sizeof(char));
     strcpy(fpath,name);
     checksum(strcat(fpath,dirsname[i]));
   }
